@@ -29,7 +29,7 @@ export default function App() {
       message.error(
         error instanceof Error
           ? error.message
-          : '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0448\u0430\u0431\u043b\u043e\u043d\u044b \u0434\u0436\u043e\u0431.',
+          : 'Не удалось загрузить шаблоны задач.',
       );
     } finally {
       setTemplatesLoading(false);
@@ -44,7 +44,7 @@ export default function App() {
       message.error(
         error instanceof Error
           ? error.message
-          : '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u043f\u0430\u0439\u043f\u043b\u0430\u0439\u043d\u044b.',
+          : 'Не удалось загрузить пайплайны.',
       );
     }
   }
@@ -65,11 +65,11 @@ export default function App() {
         <Header className="app-header">
           <div className="brand-area">
             <Typography.Title level={3} style={{ margin: 0, color: '#f9fafb' }}>
-              CI/CD Master Console
+              CI/CD Управляющий сервис
             </Typography.Title>
             <Typography.Text style={{ color: 'rgba(249,250,251,.8)' }}>
               {
-                '\u041e\u0440\u043a\u0435\u0441\u0442\u0440\u0430\u0446\u0438\u044f \u043f\u0430\u0439\u043f\u043b\u0430\u0439\u043d\u043e\u0432, \u044d\u0442\u0430\u043f\u043e\u0432 \u0438 live-\u043b\u043e\u0433\u043e\u0432 executor \u0441\u0435\u0440\u0432\u0438\u0441\u043e\u0432'
+                'Оркестрация пайплайнов, этапов и журналов сервисов-исполнителей'
               }
             </Typography.Text>
           </div>
@@ -79,8 +79,8 @@ export default function App() {
             value={mode}
             onChange={setMode}
             options={[
-              { label: <Space><BuildOutlined /> Builder</Space>, value: 'builder' },
-              { label: <Space><DashboardOutlined /> Monitor</Space>, value: 'monitor' },
+              { label: <Space><BuildOutlined /> Конструктор</Space>, value: 'builder' },
+              { label: <Space><DashboardOutlined /> Мониторинг</Space>, value: 'monitor' },
             ]}
           />
         </Header>

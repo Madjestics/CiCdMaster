@@ -15,11 +15,11 @@ export interface TemplateMeta {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  vsc: '\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 \u043a\u043e\u0434\u0430',
-  build: '\u0421\u0431\u043e\u0440\u043a\u0430',
-  test: '\u0422\u0435\u0441\u0442\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435',
-  deploy: '\u0414\u0435\u043f\u043b\u043e\u0439',
-  fuzzing: '\u0424\u0430\u0437\u0437\u0438\u043d\u0433',
+  vsc: 'Загрузка кода',
+  build: 'Сборка',
+  test: 'Тестирование',
+  deploy: 'Деплой',
+  fuzzing: 'Фаззинг',
 };
 
 const ACTION_LABELS: Record<string, string> = {

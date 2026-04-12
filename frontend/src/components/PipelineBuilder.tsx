@@ -44,7 +44,7 @@ interface JobModalState {
 
 const initialStage = (): BuilderStageDraft => ({
   localId: createId(),
-  name: 'Source & Build',
+  name: 'Загрузка и сборка',
   description: 'Базовый этап загрузки и сборки',
   jobs: [],
 });
@@ -139,7 +139,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
       ...prev,
       {
         localId: createId(),
-        name: `Stage ${prev.length + 1}`,
+        name: `Этап ${prev.length + 1}`,
         description: '',
         jobs: [],
       },
@@ -172,12 +172,12 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
     }
 
     if (jobMode === 'template' && !selectedTemplate) {
-      message.error('Выберите шаблон джобы.');
+      message.error('Выберите шаблон задачи.');
       return;
     }
 
     if (jobMode === 'script' && !scriptDraft.trim()) {
-      message.error('Введите скрипт для ручной джобы.');
+      message.error('Введите скрипт для ручной задачи.');
       return;
     }
 
@@ -225,7 +225,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
     }
 
     if (stages.some((stage) => stage.jobs.length === 0)) {
-      message.error('Каждый этап должен содержать минимум одну джобу.');
+      message.error('Каждый этап должен содержать минимум одну задачу.');
       return;
     }
 
@@ -242,7 +242,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
         const createdStage = await api.createStage({
           pipelineId: pipeline.id,
           order: stageIndex + 1,
-          name: stage.name.trim() || `Stage ${stageIndex + 1}`,
+          name: stage.name.trim() || `Этап ${stageIndex + 1}`,
           description: stage.description?.trim() || '',
         });
 
@@ -278,10 +278,10 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
         <Flex vertical gap={18}>
           <div>
             <Typography.Title level={3} style={{ marginBottom: 8 }}>
-              Pipeline Builder
+              Конструктор пайплайна
             </Typography.Title>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              Соберите пайплайн как конструктор: этапы, шаблонные джобы, кастомные скрипты.
+              Соберите пайплайн как конструктор: этапы, шаблонные задачи и ручные скрипты.
             </Typography.Paragraph>
           </div>
 
@@ -290,7 +290,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
               <Typography.Text strong>Название пайплайна</Typography.Text>
               <Input
                 size="large"
-                placeholder="Например: Java service delivery"
+                placeholder="Например: Поставка Java-сервиса"
                 value={pipelineName}
                 onChange={(event) => setPipelineName(event.target.value)}
               />
@@ -313,7 +313,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
       <Card className="soft-card" loading={templatesLoading}>
         <Flex align="center" justify="space-between" style={{ marginBottom: 10 }}>
           <Typography.Title level={4} style={{ margin: 0 }}>
-            Этапы и джобы
+            Этапы и задачи
           </Typography.Title>
           <Button type="dashed" icon={<PlusOutlined />} onClick={addStage}>
             Добавить этап
@@ -328,7 +328,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
               variant="outlined"
               title={
                 <Flex align="center" gap={10}>
-                  <Tag color="geekblue">Stage {index + 1}</Tag>
+                  <Tag color="geekblue">Этап {index + 1}</Tag>
                   <Input
                     placeholder="Название этапа"
                     value={stage.name}
@@ -358,7 +358,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
 
                 {stage.jobs.length === 0 ? (
                   <Empty
-                    description="Пока нет джоб"
+                    description="Пока нет задач"
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     styles={{ image: { height: 44 } }}
                   />
@@ -381,7 +381,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
                           avatar={job.mode === 'template' ? <NodeIndexOutlined /> : <CodeOutlined />}
                           title={
                             <Space>
-                              <Tag color="cyan">Job {jobIndex + 1}</Tag>
+                              <Tag color="cyan">Задача {jobIndex + 1}</Tag>
                               {job.mode === 'template'
                                 ? buildTemplateTitle({
                                     id: job.templateId ?? '',
@@ -403,7 +403,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
                 )}
 
                 <Button icon={<PlusOutlined />} onClick={() => openJobModal(stage.localId)}>
-                  Добавить джобу
+                  Добавить задачу
                 </Button>
               </Flex>
             </Card>
@@ -426,7 +426,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
       </Card>
 
       <Modal
-        title={`Новая джоба${selectedStage ? ` для этапа “${selectedStage.name}”` : ''}`}
+        title={`Новая задача${selectedStage ? ` для этапа «${selectedStage.name}»` : ''}`}
         open={jobModal.open}
         onCancel={closeJobModal}
         onOk={appendJobToStage}
@@ -440,7 +440,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
             value={jobMode}
             onChange={(event) => setJobMode(event.target.value as BuilderJobMode)}
             options={[
-              { value: 'template', label: 'Шаблонная джоба' },
+              { value: 'template', label: 'Шаблонная задача' },
               { value: 'script', label: 'Ручной скрипт' },
             ]}
           />

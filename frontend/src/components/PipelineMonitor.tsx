@@ -47,7 +47,7 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
   const [liveLogs, setLiveLogs] = useState<string[]>([]);
   const [sseState, setSseState] = useState<'idle' | 'connecting' | 'connected'>('idle');
 
-  const [initiatedBy, setInitiatedBy] = useState('frontend-user');
+  const [initiatedBy, setInitiatedBy] = useState('оператор');
   const [runLoading, setRunLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
 
@@ -88,7 +88,13 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
           setLiveLogs((prev) => [...prev, payload.logs ?? '']);
         }
         if (payload.status) {
-          patchJobStatus(payload.jobId, payload.status as JobStatus);
+          const nextStatus = payload.status as JobStatus;
+          patchJobStatus(payload.jobId, nextStatus);
+          if (payload.jobId === selectedJobId && isFinalStatus(nextStatus)) {
+            setTimeout(() => {
+              void loadJobHistory(payload.jobId);
+            }, 250);
+          }
         }
       } catch {
         // ignore malformed events
@@ -113,7 +119,7 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
       const stageStatus = deriveStageStatus(stage.jobs.map((job) => job.status));
       return {
         title: stage.name,
-        description: stage.description || `Jobs: ${stage.jobs.length}`,
+        description: stage.description || `Задач: ${stage.jobs.length}`,
         status: stageStatus,
       };
     });
@@ -177,7 +183,7 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
         initiatedBy: initiatedBy.trim(),
         parameters: {},
       });
-      message.success('Команда запуска отправлена в executor-сервисы.');
+      message.success('Команда запуска отправлена в сервисы-исполнители через Kafka.');
     } catch (error) {
       message.error(error instanceof Error ? error.message : 'Ошибка отправки команды запуска.');
     } finally {
@@ -241,7 +247,7 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
               onClick={handleRunPipeline}
               disabled={!selectedPipelineId}
             >
-              Run
+              Запустить
             </Button>
             <Button
               danger
@@ -250,7 +256,7 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
               onClick={handleCancelPipeline}
               disabled={!selectedPipelineId}
             >
-              Cancel
+              Остановить
             </Button>
           </Space>
         </Flex>
@@ -281,7 +287,7 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
 
             <div style={{ height: 16 }} />
 
-            <Card className="soft-card" title="Этапы и джобы">
+            <Card className="soft-card" title="Этапы и задачи">
               <Space direction="vertical" size={12} style={{ width: '100%' }}>
                 {stages.map((stage) => (
                   <Card
@@ -332,11 +338,11 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
             <Card
               className="soft-card"
              
-              title="Логи job"
+              title="Логи задачи"
               extra={
                 <Space>
                   <Tag color={sseState === 'connected' ? 'green' : 'default'}>
-                    SSE: {sseState}
+                    SSE: {formatSseState(sseState)}
                   </Tag>
                 </Space>
               }
@@ -347,9 +353,9 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
                   onChange={setSelectedJobId}
                   options={allJobs.map((job) => ({
                     value: job.id,
-                    label: `Job #${job.order} (${job.status})`,
+                    label: `Задача #${job.order} (${job.status})`,
                   }))}
-                  placeholder="Выберите job"
+                  placeholder="Выберите задачу"
                 />
 
                 {selectedJob ? (
@@ -360,13 +366,13 @@ export function PipelineMonitor({ pipelines, onReloadPipelines }: Props) {
                     </Space>
                     <Typography.Text strong>История</Typography.Text>
                     <pre className="log-console">{historicalLogs || 'История пока пустая'}</pre>
-                    <Typography.Text strong>Live stream</Typography.Text>
+                    <Typography.Text strong>Поток в реальном времени</Typography.Text>
                     <pre className="log-console log-console-live">
-                      {liveLogs.length ? liveLogs.join('\n') : 'Ожидание live-событий...'}
+                      {liveLogs.length ? liveLogs.join('\n') : 'Ожидание новых событий...'}
                     </pre>
                   </>
                 ) : (
-                  <Empty description="Выберите job для просмотра логов" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  <Empty description="Выберите задачу для просмотра логов" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 )}
               </Space>
             </Card>
@@ -391,4 +397,18 @@ function deriveStageStatus(statuses: JobStatus[]): 'wait' | 'process' | 'finish'
     return 'process';
   }
   return 'wait';
+}
+
+function formatSseState(state: 'idle' | 'connecting' | 'connected'): string {
+  if (state === 'connected') {
+    return 'подключено';
+  }
+  if (state === 'connecting') {
+    return 'подключение';
+  }
+  return 'ожидание';
+}
+
+function isFinalStatus(status: JobStatus): boolean {
+  return status === 'SUCCESS' || status === 'FAILED' || status === 'CANCELED';
 }

@@ -12,7 +12,7 @@ export function TemplateParamForm({ fields, value, onChange }: Props) {
   if (fields.length === 0) {
     return (
       <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-        {'\u0414\u043b\u044f \u0432\u044b\u0431\u0440\u0430\u043d\u043d\u043e\u0433\u043e \u0448\u0430\u0431\u043b\u043e\u043d\u0430 \u043d\u0435\u0442 \u043f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u043e\u0432.'}
+        {'Для выбранного шаблона нет параметров.'}
       </Typography.Paragraph>
     );
   }
