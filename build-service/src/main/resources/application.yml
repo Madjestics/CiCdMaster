@@ -1,0 +1,29 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:cicd-build-service}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+
+app:
+  kafka:
+    topics:
+      executor-commands: ${KAFKA_TOPIC_EXECUTOR_COMMANDS:cicd.executor.commands}
+      executor-events: ${KAFKA_TOPIC_EXECUTOR_EVENTS:cicd.executor.events}
+  build:
+    master-base-url: ${MASTER_BASE_URL:http://localhost:8080}
+    workspace-root: ${BUILD_WORKSPACE_ROOT:./workspace}
+    command-timeout-seconds: ${BUILD_COMMAND_TIMEOUT_SECONDS:900}

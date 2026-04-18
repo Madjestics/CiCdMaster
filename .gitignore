@@ -9,6 +9,8 @@ Thumbs.db
 
 # Java / Maven / Spring Boot
 target/
+master-service/target/
+build-service/target/
 out/
 *.class
 *.jar
@@ -24,11 +26,13 @@ replay_pid*
 .env.*.local
 
 # Frontend artifacts
-frontend/node_modules/
-frontend/dist/
-frontend/.vite/
+master-service/frontend/node_modules/
+master-service/frontend/dist/
+master-service/frontend/.vite/
+
+# Build service runtime workspace
+build-service/workspace/
 
 # Optional root-level node artifacts
 node_modules/
 dist/
-

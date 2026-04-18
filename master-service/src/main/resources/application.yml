@@ -47,7 +47,7 @@ app:
       executor-commands: ${KAFKA_TOPIC_EXECUTOR_COMMANDS:cicd.executor.commands}
       executor-events: ${KAFKA_TOPIC_EXECUTOR_EVENTS:cicd.executor.events}
     mock-executor:
-      enabled: ${KAFKA_MOCK_EXECUTOR_ENABLED:true}
+      enabled: ${KAFKA_MOCK_EXECUTOR_ENABLED:false}
       queue-delay-ms: ${KAFKA_MOCK_QUEUE_DELAY_MS:350}
       run-delay-ms: ${KAFKA_MOCK_RUN_DELAY_MS:1000}
       log-chunk-delay-ms: ${KAFKA_MOCK_LOG_CHUNK_DELAY_MS:650}
