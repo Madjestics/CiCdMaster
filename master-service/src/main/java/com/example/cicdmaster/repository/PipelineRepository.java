@@ -7,5 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PipelineRepository extends JpaRepository<PipelineEntity, UUID> {
 
-    List<PipelineEntity> findByFolderId(UUID folderId);
+    List<PipelineEntity> findByFolderIdOrderByNameAsc(UUID folderId);
+
+    List<PipelineEntity> findByFolderIsNullOrderByNameAsc();
 }

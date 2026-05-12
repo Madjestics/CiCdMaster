@@ -1,6 +1,7 @@
 package com.example.cicdmaster.controller;
 
 import com.example.cicdmaster.dto.PipelineCancelRequest;
+import com.example.cicdmaster.dto.PipelineRunResponse;
 import com.example.cicdmaster.dto.PipelineResponse;
 import com.example.cicdmaster.dto.PipelineRunRequest;
 import com.example.cicdmaster.dto.PipelineUpsertRequest;
@@ -32,6 +33,11 @@ public class PipelineController {
         return pipelineService.findAll();
     }
 
+    @GetMapping("/root")
+    public List<PipelineResponse> findRoot() {
+        return pipelineService.findRoot();
+    }
+
     @GetMapping("/{id}")
     public PipelineResponse findById(@PathVariable UUID id) {
         return pipelineService.findById(id);
@@ -40,6 +46,11 @@ public class PipelineController {
     @GetMapping("/by-folder/{folderId}")
     public List<PipelineResponse> findByFolder(@PathVariable UUID folderId) {
         return pipelineService.findByFolder(folderId);
+    }
+
+    @GetMapping("/{id}/runs")
+    public List<PipelineRunResponse> findRuns(@PathVariable UUID id) {
+        return pipelineService.findRuns(id);
     }
 
     @PostMapping

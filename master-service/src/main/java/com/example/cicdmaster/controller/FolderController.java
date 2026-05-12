@@ -30,6 +30,16 @@ public class FolderController {
         return folderService.findAll();
     }
 
+    @GetMapping("/root")
+    public List<FolderResponse> findRoot() {
+        return folderService.findRoot();
+    }
+
+    @GetMapping("/by-parent/{parentId}")
+    public List<FolderResponse> findByParent(@PathVariable UUID parentId) {
+        return folderService.findByParent(parentId);
+    }
+
     @GetMapping("/{id}")
     public FolderResponse findById(@PathVariable UUID id) {
         return folderService.findById(id);

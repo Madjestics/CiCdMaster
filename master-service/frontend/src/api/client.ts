@@ -1,8 +1,11 @@
 import { API_BASE_URL, request } from './http';
 import type {
+  FolderResponse,
+  FolderUpsertRequest,
   JobHistoryResponse,
   JobResponse,
   JobTemplateResponse,
+  PipelineRunResponse,
   JobUpsertRequest,
   PipelineCancelRequest,
   PipelineResponse,
@@ -13,8 +16,20 @@ import type {
 } from '../types/api';
 
 export const api = {
+  fetchFolders: () => request<FolderResponse[]>('/api/v1/folders'),
+  fetchRootFolders: () => request<FolderResponse[]>('/api/v1/folders/root'),
+  fetchFoldersByParent: (parentId: string) => request<FolderResponse[]>(`/api/v1/folders/by-parent/${parentId}`),
+  createFolder: (payload: FolderUpsertRequest) =>
+    request<FolderResponse>('/api/v1/folders', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   fetchPipelines: () => request<PipelineResponse[]>('/api/v1/pipelines'),
+  fetchRootPipelines: () => request<PipelineResponse[]>('/api/v1/pipelines/root'),
   fetchPipelineById: (pipelineId: string) => request<PipelineResponse>(`/api/v1/pipelines/${pipelineId}`),
+  fetchPipelineRuns: (pipelineId: string) => request<PipelineRunResponse[]>(`/api/v1/pipelines/${pipelineId}/runs`),
+  fetchPipelinesByFolder: (folderId: string) => request<PipelineResponse[]>(`/api/v1/pipelines/by-folder/${folderId}`),
   createPipeline: (payload: PipelineUpsertRequest) =>
     request<PipelineResponse>('/api/v1/pipelines', {
       method: 'POST',

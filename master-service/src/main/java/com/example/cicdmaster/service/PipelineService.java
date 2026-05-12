@@ -2,6 +2,7 @@ package com.example.cicdmaster.service;
 
 import com.example.cicdmaster.domain.entity.PipelineEntity;
 import com.example.cicdmaster.dto.PipelineCancelRequest;
+import com.example.cicdmaster.dto.PipelineRunResponse;
 import com.example.cicdmaster.dto.PipelineResponse;
 import com.example.cicdmaster.dto.PipelineRunRequest;
 import com.example.cicdmaster.dto.PipelineUpsertRequest;
@@ -20,9 +21,17 @@ public class PipelineService {
     private final PipelineRepository pipelineRepository;
     private final FolderService folderService;
     private final ExecutorCommandService executorCommandService;
+    private final PipelineRunHistoryService pipelineRunHistoryService;
 
     public List<PipelineResponse> findAll() {
-        return pipelineRepository.findAll().stream().map(this::toResponse).toList();
+        return pipelineRepository.findAll().stream()
+                .sorted((left, right) -> left.getName().compareToIgnoreCase(right.getName()))
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<PipelineResponse> findRoot() {
+        return pipelineRepository.findByFolderIsNullOrderByNameAsc().stream().map(this::toResponse).toList();
     }
 
     public PipelineResponse findById(UUID id) {
@@ -30,7 +39,7 @@ public class PipelineService {
     }
 
     public List<PipelineResponse> findByFolder(UUID folderId) {
-        return pipelineRepository.findByFolderId(folderId).stream().map(this::toResponse).toList();
+        return pipelineRepository.findByFolderIdOrderByNameAsc(folderId).stream().map(this::toResponse).toList();
     }
 
     @Transactional
@@ -58,6 +67,10 @@ public class PipelineService {
 
     public void cancel(UUID id, PipelineCancelRequest request) {
         executorCommandService.sendPipelineCancel(getEntity(id), request != null ? request.reason() : null);
+    }
+
+    public List<PipelineRunResponse> findRuns(UUID id) {
+        return pipelineRunHistoryService.findByPipeline(id);
     }
 
     public PipelineEntity getEntity(UUID id) {

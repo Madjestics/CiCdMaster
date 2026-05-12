@@ -98,7 +98,7 @@ public class MockExecutorService {
                 List<JobEntity> jobs = jobRepository.findByStageIdOrderByOrderIndexAsc(stage.getId());
                 for (JobEntity job : jobs) {
                     if (isPipelineCanceled(pipelineId)) {
-                        publishCanceledBeforeStart(job, pipelineId);
+                        publishCanceledBeforeStart(job, pipelineId, commandMessage);
                         continue;
                     }
                     simulateJobLifecycle(job, pipelineId, commandMessage, false);
@@ -159,7 +159,9 @@ public class MockExecutorService {
                     historySequence.incrementAndGet(),
                     Instant.now(),
                     resolveCancelReason(pipelineId),
-                    "JOB_CANCELED"
+                    "JOB_CANCELED",
+                    commandMessage,
+                    retry
             );
             return;
         }
@@ -184,7 +186,16 @@ public class MockExecutorService {
 
         pause(kafkaProperties.getMockExecutor().getLogChunkDelayMs());
         if (isPipelineCanceled(pipelineId)) {
-            publishCanceledEvent(job, pipelineId, historyId, startedAt, resolveCancelReason(pipelineId), "JOB_CANCELED");
+            publishCanceledEvent(
+                    job,
+                    pipelineId,
+                    historyId,
+                    startedAt,
+                    resolveCancelReason(pipelineId),
+                    "JOB_CANCELED",
+                    commandMessage,
+                    retry
+            );
             return;
         }
 
@@ -206,7 +217,16 @@ public class MockExecutorService {
 
         pause(kafkaProperties.getMockExecutor().getRunDelayMs());
         if (isPipelineCanceled(pipelineId)) {
-            publishCanceledEvent(job, pipelineId, historyId, startedAt, resolveCancelReason(pipelineId), "JOB_CANCELED");
+            publishCanceledEvent(
+                    job,
+                    pipelineId,
+                    historyId,
+                    startedAt,
+                    resolveCancelReason(pipelineId),
+                    "JOB_CANCELED",
+                    commandMessage,
+                    retry
+            );
             return;
         }
 
@@ -229,14 +249,16 @@ public class MockExecutorService {
         );
     }
 
-    private void publishCanceledBeforeStart(JobEntity job, UUID pipelineId) {
+    private void publishCanceledBeforeStart(JobEntity job, UUID pipelineId, ExecutorCommandMessage commandMessage) {
         publishCanceledEvent(
                 job,
                 pipelineId,
                 historySequence.incrementAndGet(),
                 Instant.now(),
                 resolveCancelReason(pipelineId),
-                "JOB_SKIPPED_BY_CANCEL"
+                "JOB_SKIPPED_BY_CANCEL",
+                commandMessage,
+                false
         );
     }
 
@@ -246,10 +268,14 @@ public class MockExecutorService {
             long historyId,
             Instant startedAt,
             String reason,
-            String eventType
+            String eventType,
+            ExecutorCommandMessage commandMessage,
+            boolean retry
     ) {
         Instant finishedAt = Instant.now();
         long durationMs = Math.max(0L, finishedAt.toEpochMilli() - startedAt.toEpochMilli());
+        Map<String, Object> additionalData = buildAdditionalData(commandMessage, retry, "canceled", reason);
+        additionalData.put("result", "canceled");
         publishEvent(
                 job.getId(),
                 new ExecutorEventMessage(
@@ -262,11 +288,7 @@ public class MockExecutorService {
                         finishedAt,
                         durationMs,
                         buildCanceledLogs(job, reason),
-                        Map.of(
-                                "mock", true,
-                                "result", "canceled",
-                                "reason", reason == null || reason.isBlank() ? "manual_cancel" : reason
-                        )
+                        additionalData
                 )
         );
     }
@@ -282,6 +304,9 @@ public class MockExecutorService {
         data.put("phase", phase);
         data.put("retry", retry);
         data.put("commandType", commandMessage.commandType());
+        if (commandMessage.requestedAt() != null) {
+            data.put("requestedAt", commandMessage.requestedAt());
+        }
         if (commandMessage.initiatedBy() != null && !commandMessage.initiatedBy().isBlank()) {
             data.put("initiatedBy", commandMessage.initiatedBy());
         }

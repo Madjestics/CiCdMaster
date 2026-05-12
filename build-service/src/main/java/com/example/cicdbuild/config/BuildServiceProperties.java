@@ -12,4 +12,14 @@ public class BuildServiceProperties {
     private String masterBaseUrl = "http://localhost:8080";
     private String workspaceRoot = "./workspace";
     private long commandTimeoutSeconds = 900;
+    private RepositoryManager repositoryManager = new RepositoryManager();
+
+    @Getter
+    @Setter
+    public static class RepositoryManager {
+
+        private String username = "";
+        private String password = "";
+        private long uploadTimeoutSeconds = 120;
+    }
 }

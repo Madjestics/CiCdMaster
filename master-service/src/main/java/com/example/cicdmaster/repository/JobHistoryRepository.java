@@ -10,6 +10,8 @@ public interface JobHistoryRepository extends JpaRepository<JobHistoryEntity, Lo
 
     List<JobHistoryEntity> findByJobIdOrderByStartDateDesc(UUID jobId);
 
+    List<JobHistoryEntity> findByJobStagePipelineIdOrderByStartDateDesc(UUID pipelineId);
+
     @Query("select coalesce(max(history.id), 0) from JobHistoryEntity history")
     long findMaxId();
 }

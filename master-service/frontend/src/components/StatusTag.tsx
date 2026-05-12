@@ -12,10 +12,11 @@ const statusMeta: Record<string, { color: string; label: string }> = {
   SUCCESS: { color: 'green', label: 'Успешно' },
   FAILED: { color: 'red', label: 'Ошибка' },
   CANCELED: { color: 'orange', label: 'Отменено' },
+  UNKNOWN: { color: 'default', label: 'Неизвестно' },
 };
 
 export function StatusTag({ status }: Props) {
-  const normalized = status.toUpperCase();
+  const normalized = String(status).toUpperCase();
   const meta = statusMeta[normalized] ?? { color: 'default', label: normalized };
   return <Tag color={meta.color}>{meta.label}</Tag>;
 }

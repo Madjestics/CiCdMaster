@@ -1,6 +1,5 @@
 package com.example.cicdmaster.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -11,7 +10,7 @@ public record JobHistoryCreateRequest(
         @NotNull UUID jobId,
         @NotNull Long duration,
         @NotNull LocalDateTime startDate,
-        @NotBlank String logs,
+        String logs,
         Map<String, Object> additionalData
 ) {
 }

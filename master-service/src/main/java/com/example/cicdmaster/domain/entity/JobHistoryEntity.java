@@ -35,9 +35,6 @@ public class JobHistoryEntity {
     @Column(name = "start_date", nullable = false)
     private LocalDateTime startDate;
 
-    @Column(nullable = false)
-    private String logs;
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "additional_data", columnDefinition = "jsonb")
     private Map<String, Object> additionalData;

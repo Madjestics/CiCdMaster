@@ -19,6 +19,12 @@ spring:
         spring.json.use.type.headers: false
 
 app:
+  executor-events:
+    transport: ${EXECUTOR_EVENTS_TRANSPORT:kafka}
+    opensearch:
+      enabled: ${OPENSEARCH_LOGS_ENABLED:true}
+      endpoint: ${OPENSEARCH_ENDPOINT:http://localhost:9200}
+      index: ${OPENSEARCH_EVENTS_INDEX:cicd-executor-events}
   kafka:
     topics:
       executor-commands: ${KAFKA_TOPIC_EXECUTOR_COMMANDS:cicd.executor.commands}
@@ -27,3 +33,7 @@ app:
     master-base-url: ${MASTER_BASE_URL:http://localhost:8080}
     workspace-root: ${BUILD_WORKSPACE_ROOT:./workspace}
     command-timeout-seconds: ${BUILD_COMMAND_TIMEOUT_SECONDS:900}
+    repository-manager:
+      username: ${REPOSITORY_MANAGER_USERNAME:}
+      password: ${REPOSITORY_MANAGER_PASSWORD:}
+      upload-timeout-seconds: ${REPOSITORY_MANAGER_UPLOAD_TIMEOUT_SECONDS:120}

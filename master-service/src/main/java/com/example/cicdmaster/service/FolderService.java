@@ -18,7 +18,18 @@ public class FolderService {
     private final FolderRepository folderRepository;
 
     public List<FolderResponse> findAll() {
-        return folderRepository.findAll().stream().map(this::toResponse).toList();
+        return folderRepository.findAll().stream()
+                .sorted((left, right) -> left.getName().compareToIgnoreCase(right.getName()))
+                .map(this::toResponse)
+                .toList();
+    }
+
+    public List<FolderResponse> findRoot() {
+        return folderRepository.findByParentIsNullOrderByNameAsc().stream().map(this::toResponse).toList();
+    }
+
+    public List<FolderResponse> findByParent(UUID parentId) {
+        return folderRepository.findByParentIdOrderByNameAsc(parentId).stream().map(this::toResponse).toList();
     }
 
     public FolderResponse findById(UUID id) {

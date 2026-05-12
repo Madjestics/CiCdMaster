@@ -7,6 +7,11 @@ import com.example.cicdbuild.dto.JobTemplateResponse;
 import com.example.cicdbuild.dto.StageResponse;
 import com.example.cicdbuild.kafka.message.ExecutorCommandMessage;
 import com.example.cicdbuild.kafka.message.ExecutorEventMessage;
+import com.example.cicdbuild.service.artifacts.ArtifactPublication;
+import com.example.cicdbuild.service.artifacts.ArtifactPublisher;
+import com.example.cicdbuild.service.artifacts.ArtifactUploadResult;
+import com.example.cicdbuild.service.events.ExecutorEventPublisher;
+import com.example.cicdbuild.service.events.ExecutorLogPublisher;
 import jakarta.annotation.PreDestroy;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -30,6 +35,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -41,6 +48,9 @@ public class BuildExecutorService {
     private static final Pattern ARG_PATTERN = Pattern.compile("\"([^\"]*)\"|'([^']*)'|(\\S+)");
 
     private final MasterApiClient masterApiClient;
+    private final ExecutorEventPublisher executorEventPublisher;
+    private final ExecutorLogPublisher executorLogPublisher;
+    private final ArtifactPublisher artifactPublisher;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final AppKafkaProperties kafkaProperties;
     private final BuildServiceProperties buildServiceProperties;
@@ -93,6 +103,8 @@ public class BuildExecutorService {
     private void executePipeline(ExecutorCommandMessage commandMessage) {
         UUID pipelineId = commandMessage.pipelineId();
         ExecutionContext context = new ExecutionContext(pipelineId, resolvePipelineWorkspace(pipelineId));
+        Instant pipelineStartedAt = Instant.now();
+        PipelineExecutionSummary summary = new PipelineExecutionSummary();
 
         try {
             List<StageResponse> stages = masterApiClient.fetchStagesByPipeline(pipelineId).stream()
@@ -104,15 +116,17 @@ public class BuildExecutorService {
                 List<JobResponse> jobs = masterApiClient.fetchJobsByStage(stage.id()).stream()
                         .sorted(Comparator.comparingInt(job -> safeOrder(job.order())))
                         .toList();
+                summary.totalJobs += jobs.size();
 
                 for (JobResponse job : jobs) {
                     if (isCanceled(pipelineId)) {
-                        publishSkipped(job, pipelineId, resolveCancelReason(pipelineId));
+                        summary.record(publishSkipped(job, pipelineId, resolveCancelReason(pipelineId)));
                         continue;
                     }
 
-                    boolean success = executeJob(commandMessage, job, context, false);
-                    if (!success) {
+                    String jobStatus = executeJob(commandMessage, job, context, false);
+                    summary.record(jobStatus);
+                    if ("FAILED".equals(jobStatus)) {
                         cancellationFlags.computeIfAbsent(pipelineId, ignored -> new AtomicBoolean(false)).set(true);
                         cancellationReasons.putIfAbsent(pipelineId, "Сборка остановлена после ошибки задачи " + job.id());
                         stopExecution = true;
@@ -125,8 +139,9 @@ public class BuildExecutorService {
                 }
             }
         } catch (Exception ex) {
-            // no global pipeline event in current contract; failures are reported by per-job events
+            summary.infrastructureError = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
         } finally {
+            publishPipelineFinished(commandMessage, summary, pipelineStartedAt, Instant.now());
             cancellationFlags.remove(pipelineId);
             cancellationReasons.remove(pipelineId);
         }
@@ -139,7 +154,7 @@ public class BuildExecutorService {
         executeJob(commandMessage, job, context, true);
     }
 
-    private boolean executeJob(
+    private String executeJob(
             ExecutorCommandMessage commandMessage,
             JobResponse job,
             ExecutionContext context,
@@ -164,8 +179,7 @@ public class BuildExecutorService {
         );
 
         if (isCanceled(pipelineId)) {
-            publishSkipped(job, pipelineId, resolveCancelReason(pipelineId));
-            return false;
+            return publishSkipped(job, pipelineId, resolveCancelReason(pipelineId));
         }
 
         long historyId = historySequence.incrementAndGet();
@@ -194,7 +208,7 @@ public class BuildExecutorService {
                             additionalData(commandMessage, "failed", "Ошибка построения плана", -1, false)
                     )
             );
-            return false;
+            return "FAILED";
         }
 
         publishEvent(
@@ -219,19 +233,18 @@ public class BuildExecutorService {
         );
 
         CommandResult result = runCommand(plan.command(), plan.workingDirectory());
+        ArtifactUploadResult artifactUploadResult = null;
+        if (result.exitCode() == 0 && plan.artifactPublication() != null) {
+            artifactUploadResult = artifactPublisher.upload(plan.artifactPublication());
+        }
         if (plan.newProjectDirectory() != null && result.exitCode() == 0) {
             context.setProjectDirectory(plan.newProjectDirectory());
         }
 
         Instant finishedAt = Instant.now();
         long durationMs = Math.max(0L, finishedAt.toEpochMilli() - startedAt.toEpochMilli());
-        String status = resolveFinalStatus(result, pipelineId);
-        String logs = String.join(
-                "\n",
-                line("INFO", "Шаг: " + plan.description()),
-                line("INFO", "Завершение: статус=" + status + ", code=" + result.exitCode()),
-                result.output()
-        );
+        String status = resolveFinalStatus(result, artifactUploadResult, pipelineId);
+        String logs = buildFinalLogs(plan, result, artifactUploadResult, status);
 
         publishEvent(
                 job.id(),
@@ -245,11 +258,18 @@ public class BuildExecutorService {
                         finishedAt,
                         durationMs,
                         logs,
-                        additionalData(commandMessage, "finished", plan.description(), result.exitCode(), result.timedOut())
+                        additionalData(
+                                commandMessage,
+                                "finished",
+                                plan.description(),
+                                result.exitCode(),
+                                result.timedOut(),
+                                artifactUploadResult
+                        )
                 )
         );
 
-        return "SUCCESS".equals(status);
+        return status;
     }
 
     private JobExecutionPlan resolvePlan(JobResponse job, ExecutionContext context) {
@@ -340,7 +360,7 @@ public class BuildExecutorService {
         List<String> command = new ArrayList<>();
         command.add(executable);
         command.addAll(splitArgs(goals));
-        return new JobExecutionPlan(command, workingDir, "Сборка проекта Maven", null);
+        return new JobExecutionPlan(command, workingDir, "Сборка проекта Maven", null, artifactPublication(params, workingDir));
     }
 
     private JobExecutionPlan gradlePlan(Map<String, Object> params, ExecutionContext context) {
@@ -352,7 +372,7 @@ public class BuildExecutorService {
         List<String> command = new ArrayList<>();
         command.add(executable);
         command.addAll(splitArgs(tasks));
-        return new JobExecutionPlan(command, workingDir, "Сборка проекта Gradle", null);
+        return new JobExecutionPlan(command, workingDir, "Сборка проекта Gradle", null, artifactPublication(params, workingDir));
     }
 
     private JobExecutionPlan javacPlan(Map<String, Object> params, ExecutionContext context) {
@@ -361,7 +381,7 @@ public class BuildExecutorService {
         List<String> command = new ArrayList<>();
         command.add("javac");
         command.addAll(splitArgs(args));
-        return new JobExecutionPlan(command, workingDir, "Сборка Java через javac", null);
+        return new JobExecutionPlan(command, workingDir, "Сборка Java через javac", null, artifactPublication(params, workingDir));
     }
 
     private JobExecutionPlan gccPlan(Map<String, Object> params, ExecutionContext context) {
@@ -370,7 +390,7 @@ public class BuildExecutorService {
         List<String> command = new ArrayList<>();
         command.add("gcc");
         command.addAll(splitArgs(args));
-        return new JobExecutionPlan(command, workingDir, "Сборка C/C++ через gcc", null);
+        return new JobExecutionPlan(command, workingDir, "Сборка C/C++ через gcc", null, artifactPublication(params, workingDir));
     }
 
     private JobExecutionPlan scriptPlan(String script, Path workingDir, String description) {
@@ -437,7 +457,7 @@ public class BuildExecutorService {
         return new CommandResult(exitCode, output.toString().trim(), !finished);
     }
 
-    private void publishSkipped(JobResponse job, UUID pipelineId, String reason) {
+    private String publishSkipped(JobResponse job, UUID pipelineId, String reason) {
         long historyId = historySequence.incrementAndGet();
         Instant started = Instant.now();
         publishEvent(
@@ -455,6 +475,7 @@ public class BuildExecutorService {
                         Map.of("result", "canceled", "reason", reason)
                 )
         );
+        return "CANCELED";
     }
 
     private Path resolvePipelineWorkspace(UUID pipelineId) {
@@ -473,14 +494,60 @@ public class BuildExecutorService {
         return safeResolve(context.projectDirectory(), workDirValue, context.projectDirectory());
     }
 
-    private String resolveFinalStatus(CommandResult result, UUID pipelineId) {
+    private ArtifactPublication artifactPublication(Map<String, Object> params, Path workingDir) {
+        String artifactPath = value(params, "artifactPath", "");
+        String uploadUrl = firstNotBlank(
+                value(params, "artifactUploadUrl", ""),
+                value(params, "uploadUrl", ""),
+                value(params, "repositoryUrl", ""),
+                value(params, "publishUrl", "")
+        );
+        if (artifactPath.isBlank() || uploadUrl.isBlank()) {
+            return null;
+        }
+
+        return new ArtifactPublication(
+                workingDir,
+                artifactPath,
+                uploadUrl,
+                firstNotBlank(value(params, "repositoryUsername", ""), value(params, "username", "")),
+                firstNotBlank(value(params, "repositoryPassword", ""), value(params, "password", "")),
+                value(params, "contentType", "application/octet-stream")
+        );
+    }
+
+    private String resolveFinalStatus(CommandResult result, ArtifactUploadResult artifactUploadResult, UUID pipelineId) {
         if (isCanceled(pipelineId)) {
             return "CANCELED";
         }
         if (result.timedOut()) {
             return "FAILED";
         }
+        if (artifactUploadResult != null && !artifactUploadResult.success()) {
+            return "FAILED";
+        }
         return result.exitCode() == 0 ? "SUCCESS" : "FAILED";
+    }
+
+    private String buildFinalLogs(
+            JobExecutionPlan plan,
+            CommandResult result,
+            ArtifactUploadResult artifactUploadResult,
+            String status
+    ) {
+        List<String> lines = new ArrayList<>();
+        lines.add(line("INFO", "Шаг: " + plan.description()));
+        lines.add(line("INFO", "Завершение: статус=" + status + ", code=" + result.exitCode()));
+        if (artifactUploadResult != null) {
+            String level = artifactUploadResult.success() ? "INFO" : "ERROR";
+            lines.add(line(level, "Публикация артефакта: " + artifactUploadResult.message()));
+            lines.add(line(level, "Артефакт: " + artifactUploadResult.artifactPath()));
+            lines.add(line(level, "Репозиторий: " + artifactUploadResult.targetUrl()));
+        }
+        if (result.output() != null && !result.output().isBlank()) {
+            lines.add(result.output());
+        }
+        return String.join("\n", lines);
     }
 
     private Map<String, Object> additionalData(
@@ -489,6 +556,17 @@ public class BuildExecutorService {
             String description,
             Integer exitCode,
             Boolean timedOut
+    ) {
+        return additionalData(commandMessage, phase, description, exitCode, timedOut, null);
+    }
+
+    private Map<String, Object> additionalData(
+            ExecutorCommandMessage commandMessage,
+            String phase,
+            String description,
+            Integer exitCode,
+            Boolean timedOut,
+            ArtifactUploadResult artifactUploadResult
     ) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("phase", phase);
@@ -503,6 +581,13 @@ public class BuildExecutorService {
         }
         if (timedOut != null) {
             data.put("timedOut", timedOut);
+        }
+        if (artifactUploadResult != null) {
+            data.put("artifactPublished", artifactUploadResult.success());
+            data.put("artifactPath", artifactUploadResult.artifactPath());
+            data.put("artifactTargetUrl", artifactUploadResult.targetUrl());
+            data.put("artifactStatusCode", artifactUploadResult.statusCode());
+            data.put("artifactMessage", artifactUploadResult.message());
         }
         return data;
     }
@@ -544,9 +629,8 @@ public class BuildExecutorService {
         if (!Files.exists(directory)) {
             return;
         }
-        try {
-            Files.walk(directory)
-                    .sorted(Comparator.reverseOrder())
+        try(Stream<Path> files = Files.walk(directory)) {
+            files.sorted(Comparator.reverseOrder())
                     .forEach(path -> {
                         try {
                             Files.deleteIfExists(path);
@@ -650,13 +734,99 @@ public class BuildExecutorService {
     }
 
     private void publishEvent(UUID jobId, ExecutorEventMessage eventMessage) {
-        String key = jobId == null ? UUID.randomUUID().toString() : jobId.toString();
-        kafkaTemplate.send(kafkaProperties.getTopics().getExecutorEvents(), key, eventMessage);
+        executorLogPublisher.publish(jobId, eventMessage);
+        executorEventPublisher.publish(jobId, withoutLogs(eventMessage));
+    }
+
+    private ExecutorEventMessage withoutLogs(ExecutorEventMessage eventMessage) {
+        if (eventMessage == null || eventMessage.logs() == null) {
+            return eventMessage;
+        }
+        return new ExecutorEventMessage(
+                eventMessage.eventType(),
+                eventMessage.pipelineId(),
+                eventMessage.jobId(),
+                eventMessage.status(),
+                eventMessage.historyId(),
+                eventMessage.startedAt(),
+                eventMessage.finishedAt(),
+                eventMessage.durationMs(),
+                null,
+                eventMessage.additionalData()
+        );
+    }
+
+    private void publishPipelineFinished(
+            ExecutorCommandMessage commandMessage,
+            PipelineExecutionSummary summary,
+            Instant startedAt,
+            Instant finishedAt
+    ) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("phase", "finished");
+        data.put("commandType", commandMessage.commandType());
+        data.put("requestedAt", commandMessage.requestedAt());
+        data.put("initiatedBy", commandMessage.initiatedBy());
+        data.put("totalJobs", summary.totalJobs);
+        data.put("successJobs", summary.successJobs);
+        data.put("failedJobs", summary.failedJobs);
+        data.put("canceledJobs", summary.canceledJobs);
+        if (summary.infrastructureError != null && !summary.infrastructureError.isBlank()) {
+            data.put("infrastructureError", summary.infrastructureError);
+        }
+
+        ExecutorEventMessage eventMessage = new ExecutorEventMessage(
+                "PIPELINE_FINISHED",
+                commandMessage.pipelineId(),
+                null,
+                summary.status(),
+                null,
+                startedAt,
+                finishedAt,
+                Math.max(0L, finishedAt.toEpochMilli() - startedAt.toEpochMilli()),
+                null,
+                data
+        );
+        kafkaTemplate.send(kafkaProperties.getTopics().getExecutorEvents(), commandMessage.pipelineId().toString(), eventMessage);
     }
 
     @PreDestroy
     void shutdownExecutor() {
         executorPool.shutdownNow();
+    }
+
+    private static final class PipelineExecutionSummary {
+        private int totalJobs;
+        private int successJobs;
+        private int failedJobs;
+        private int canceledJobs;
+        private String infrastructureError;
+
+        private void record(String status) {
+            if ("SUCCESS".equals(status)) {
+                successJobs++;
+            } else if ("FAILED".equals(status)) {
+                failedJobs++;
+            } else if ("CANCELED".equals(status)) {
+                canceledJobs++;
+            }
+        }
+
+        private String status() {
+            if (infrastructureError != null && !infrastructureError.isBlank()) {
+                return "FAILED";
+            }
+            if (failedJobs > 0) {
+                return "FAILED";
+            }
+            if (canceledJobs > 0) {
+                return "CANCELED";
+            }
+            if (totalJobs == successJobs && totalJobs > 0) {
+                return "SUCCESS";
+            }
+            return "UNKNOWN";
+        }
     }
 
     private static final class ExecutionContext {
@@ -691,8 +861,17 @@ public class BuildExecutorService {
             List<String> command,
             Path workingDirectory,
             String description,
-            Path newProjectDirectory
+            Path newProjectDirectory,
+            ArtifactPublication artifactPublication
     ) {
+        private JobExecutionPlan(
+                List<String> command,
+                Path workingDirectory,
+                String description,
+                Path newProjectDirectory
+        ) {
+            this(command, workingDirectory, description, newProjectDirectory, null);
+        }
     }
 
     private record CommandResult(

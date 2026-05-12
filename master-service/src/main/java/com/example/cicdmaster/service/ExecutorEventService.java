@@ -11,7 +11,9 @@ import jakarta.transaction.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,7 +28,11 @@ public class ExecutorEventService {
 
     @Transactional
     public void handleEvent(ExecutorEventMessage eventMessage) {
-        if (eventMessage == null || eventMessage.jobId() == null) {
+        if (eventMessage == null) {
+            return;
+        }
+        if (eventMessage.jobId() == null) {
+            publishLogUpdate(eventMessage);
             return;
         }
 
@@ -64,9 +70,22 @@ public class ExecutorEventService {
         history.setJob(job);
         history.setStartDate(toLocalDateTime(eventMessage.startedAt()));
         history.setDuration(resolveDuration(eventMessage));
-        history.setLogs(eventMessage.logs() == null ? "" : eventMessage.logs());
-        history.setAdditionalData(eventMessage.additionalData());
+        history.setAdditionalData(enrichAdditionalData(eventMessage));
         jobHistoryRepository.save(history);
+    }
+
+    private Map<String, Object> enrichAdditionalData(ExecutorEventMessage eventMessage) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (eventMessage.additionalData() != null) {
+            data.putAll(eventMessage.additionalData());
+        }
+        if (eventMessage.status() != null && !eventMessage.status().isBlank()) {
+            data.put("eventStatus", eventMessage.status());
+        }
+        if (eventMessage.eventType() != null && !eventMessage.eventType().isBlank()) {
+            data.put("eventType", eventMessage.eventType());
+        }
+        return data.isEmpty() ? null : data;
     }
 
     private long resolveDuration(ExecutorEventMessage eventMessage) {

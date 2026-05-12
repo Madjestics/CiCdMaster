@@ -18,7 +18,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   vsc: 'Загрузка кода',
   build: 'Сборка',
   test: 'Тестирование',
-  deploy: 'Деплой',
+  deploy: 'Развертывание',
   fuzzing: 'Фаззинг',
 };
 
@@ -34,6 +34,27 @@ const ACTION_LABELS: Record<string, string> = {
   cmd: 'CMD',
   bash: 'Bash',
   fuzzing: 'Fuzzing',
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  args: 'Аргументы',
+  artifactPath: 'Путь к артефакту',
+  artifactUploadUrl: 'URL загрузки артефакта',
+  branch: 'Ветка',
+  contentType: 'Content-Type',
+  goals: 'Цели Maven',
+  login: 'Логин',
+  password: 'Пароль',
+  publishUrl: 'URL публикации',
+  repositoryPassword: 'Пароль репозитория',
+  repositoryUrl: 'URL репозитория',
+  repositoryUsername: 'Пользователь репозитория',
+  targetDir: 'Целевая папка',
+  tasks: 'Задачи Gradle',
+  uploadUrl: 'URL загрузки',
+  url: 'URL репозитория',
+  useWrapper: 'Использовать wrapper',
+  workDir: 'Рабочая папка',
 };
 
 export function resolveTemplateMeta(path: string): TemplateMeta {
@@ -138,6 +159,10 @@ export function capitalize(value: string): string {
 }
 
 function toLabel(input: string): string {
+  if (FIELD_LABELS[input]) {
+    return FIELD_LABELS[input];
+  }
+
   return input
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')

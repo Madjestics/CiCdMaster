@@ -12,7 +12,7 @@ export function TemplateParamForm({ fields, value, onChange }: Props) {
   if (fields.length === 0) {
     return (
       <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-        {'Для выбранного шаблона нет параметров.'}
+        Для выбранного шаблона нет параметров.
       </Typography.Paragraph>
     );
   }

@@ -34,6 +34,8 @@ import { TemplateParamForm } from './TemplateParamForm';
 interface Props {
   templates: JobTemplateResponse[];
   templatesLoading: boolean;
+  defaultFolderId?: UUID | null;
+  onCancel?: () => void;
   onPipelineCreated?: (pipelineId: UUID) => void;
 }
 
@@ -45,11 +47,17 @@ interface JobModalState {
 const initialStage = (): BuilderStageDraft => ({
   localId: createId(),
   name: 'Загрузка и сборка',
-  description: 'Базовый этап загрузки и сборки',
+  description: 'Базовый этап загрузки исходников и сборки',
   jobs: [],
 });
 
-export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated }: Props) {
+export function PipelineBuilder({
+  templates,
+  templatesLoading,
+  defaultFolderId,
+  onCancel,
+  onPipelineCreated,
+}: Props) {
   const [pipelineName, setPipelineName] = useState('');
   const [pipelineDescription, setPipelineDescription] = useState('');
   const [stages, setStages] = useState<BuilderStageDraft[]>([initialStage()]);
@@ -105,36 +113,37 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
     [stages, jobModal.stageId],
   );
 
-  const openJobModal = (stageId: string) => {
+  function openJobModal(stageId: string) {
     setJobModal({ open: true, stageId });
     setJobMode('template');
-    setSelectedCategory(categoryOptions[0]?.value);
-    const initialTemplate = categoryOptions.length
-      ? (templatesByCategory.get(categoryOptions[0].value) ?? [])[0]
-      : undefined;
+
+    const firstCategory = categoryOptions[0]?.value;
+    setSelectedCategory(firstCategory);
+
+    const initialTemplate = firstCategory ? (templatesByCategory.get(firstCategory) ?? [])[0] : undefined;
     setSelectedTemplateId(initialTemplate?.id);
     setParamsDraft(initialTemplate ? structuredClone(initialTemplate.paramsTemplate) : {});
     setScriptDraft('');
-  };
+  }
 
-  const closeJobModal = () => {
+  function closeJobModal() {
     setJobModal({ open: false });
-  };
+  }
 
-  const handleCategoryChange = (nextCategory: string) => {
+  function handleCategoryChange(nextCategory: string) {
     setSelectedCategory(nextCategory);
     const first = (templatesByCategory.get(nextCategory) ?? [])[0];
     setSelectedTemplateId(first?.id);
     setParamsDraft(first ? structuredClone(first.paramsTemplate) : {});
-  };
+  }
 
-  const handleTemplateChange = (templateId: string) => {
+  function handleTemplateChange(templateId: string) {
     setSelectedTemplateId(templateId);
     const template = templates.find((entry) => entry.id === templateId);
     setParamsDraft(template ? structuredClone(template.paramsTemplate) : {});
-  };
+  }
 
-  const addStage = () => {
+  function addStage() {
     setStages((prev) => [
       ...prev,
       {
@@ -144,19 +153,17 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
         jobs: [],
       },
     ]);
-  };
+  }
 
-  const updateStage = (stageId: string, patch: Partial<BuilderStageDraft>) => {
-    setStages((prev) =>
-      prev.map((stage) => (stage.localId === stageId ? { ...stage, ...patch } : stage)),
-    );
-  };
+  function updateStage(stageId: string, patch: Partial<BuilderStageDraft>) {
+    setStages((prev) => prev.map((stage) => (stage.localId === stageId ? { ...stage, ...patch } : stage)));
+  }
 
-  const removeStage = (stageId: string) => {
+  function removeStage(stageId: string) {
     setStages((prev) => prev.filter((stage) => stage.localId !== stageId));
-  };
+  }
 
-  const removeJob = (stageId: string, jobId: string) => {
+  function removeJob(stageId: string, jobId: string) {
     setStages((prev) =>
       prev.map((stage) =>
         stage.localId === stageId
@@ -164,9 +171,9 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
           : stage,
       ),
     );
-  };
+  }
 
-  const appendJobToStage = () => {
+  function appendJobToStage() {
     if (!jobModal.stageId) {
       return;
     }
@@ -211,9 +218,9 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
     );
 
     closeJobModal();
-  };
+  }
 
-  const submitPipeline = async () => {
+  async function submitPipeline() {
     if (!pipelineName.trim()) {
       message.error('Укажите название пайплайна.');
       return;
@@ -235,6 +242,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
       const pipeline = await api.createPipeline({
         name: pipelineName.trim(),
         description: pipelineDescription.trim(),
+        folderId: defaultFolderId ?? undefined,
       });
 
       for (let stageIndex = 0; stageIndex < stages.length; stageIndex += 1) {
@@ -270,7 +278,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
     } finally {
       setSaving(false);
     }
-  };
+  }
 
   return (
     <div>
@@ -281,7 +289,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
               Конструктор пайплайна
             </Typography.Title>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              Соберите пайплайн как конструктор: этапы, шаблонные задачи и ручные скрипты.
+              Сформируйте этапы, добавьте задачи на базе шаблонов или вручную задайте скрипты.
             </Typography.Paragraph>
           </div>
 
@@ -290,7 +298,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
               <Typography.Text strong>Название пайплайна</Typography.Text>
               <Input
                 size="large"
-                placeholder="Например: Поставка Java-сервиса"
+                placeholder="Например: Сборка и деплой Java-сервиса"
                 value={pipelineName}
                 onChange={(event) => setPipelineName(event.target.value)}
               />
@@ -299,7 +307,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
               <Typography.Text strong>Описание</Typography.Text>
               <Input
                 size="large"
-                placeholder="Кратко о назначении"
+                placeholder="Кратко о назначении пайплайна"
                 value={pipelineDescription}
                 onChange={(event) => setPipelineDescription(event.target.value)}
               />
@@ -393,7 +401,7 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
                           }
                           description={
                             job.mode === 'template'
-                              ? `Путь шаблона: ${job.templatePath}`
+                              ? `Шаблон: ${job.templatePath}`
                               : (job.script || '').slice(0, 110)
                           }
                         />
@@ -413,6 +421,11 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
         <Divider />
 
         <Flex justify="end">
+          {onCancel ? (
+            <Button size="large" style={{ marginRight: 12 }} onClick={onCancel}>
+              Отмена
+            </Button>
+          ) : null}
           <Button
             size="large"
             type="primary"
@@ -449,17 +462,17 @@ export function PipelineBuilder({ templates, templatesLoading, onPipelineCreated
             <>
               <Row gutter={12}>
                 <Col span={11}>
-                  <Typography.Text strong>Тип задачи</Typography.Text>
+                  <Typography.Text strong>Категория</Typography.Text>
                   <Select
                     style={{ width: '100%' }}
                     value={selectedCategory}
                     options={categoryOptions}
                     onChange={handleCategoryChange}
-                    placeholder="Выберите тип"
+                    placeholder="Выберите категорию"
                   />
                 </Col>
                 <Col span={13}>
-                  <Typography.Text strong>Вариант шаблона</Typography.Text>
+                  <Typography.Text strong>Шаблон</Typography.Text>
                   <Select
                     style={{ width: '100%' }}
                     value={selectedTemplateId}

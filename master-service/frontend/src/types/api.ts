@@ -15,6 +15,13 @@ export interface PipelineResponse {
   folderId: UUID | null;
 }
 
+export interface FolderResponse {
+  id: UUID;
+  name: string;
+  description: string | null;
+  parentId: UUID | null;
+}
+
 export interface StageResponse {
   id: UUID;
   pipelineId: UUID;
@@ -53,10 +60,42 @@ export interface JobHistoryResponse {
   additionalData: Record<string, unknown> | null;
 }
 
+export interface PipelineRunJobResponse {
+  historyId: number;
+  jobId: UUID;
+  stageId: UUID | null;
+  stageName: string;
+  stageOrder: number;
+  jobOrder: number;
+  jobLabel: string;
+  status: string;
+  duration: number;
+  startDate: string;
+  logs: string;
+  additionalData: Record<string, unknown> | null;
+}
+
+export interface PipelineRunResponse {
+  runId: string;
+  requestedAt: string;
+  initiatedBy: string | null;
+  status: string;
+  startedAt: string;
+  finishedAt: string;
+  duration: number;
+  jobs: PipelineRunJobResponse[];
+}
+
 export interface PipelineUpsertRequest {
   name: string;
   description?: string;
   folderId?: UUID;
+}
+
+export interface FolderUpsertRequest {
+  name: string;
+  description?: string;
+  parentId?: UUID;
 }
 
 export interface StageUpsertRequest {
